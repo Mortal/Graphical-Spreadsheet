@@ -1,0 +1,13 @@
+.cell {
+   position: absolute;
+   height: 1.2em;
+   border: 1px solid black;
+   width: 5em;
+}
+.cell label {
+   position: absolute;
+   top: 1.3em;
+   left: 0;
+   width: 5em;
+   text-align: center;
+}
