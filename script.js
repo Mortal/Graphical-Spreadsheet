@@ -9,6 +9,8 @@ function Cell() {
 	var ch = self.label = String.fromCharCode(idx + "a".charCodeAt(0));
 	var cell = self.el = document.createElement('div');
 
+	self.dependencies = [];
+
 	cell.className = 'cell';
 	cell.onclick = function () {
 		self.setContents(prompt('New contents of '+self.label, self.contents));
@@ -31,23 +33,103 @@ Cell.prototype.setContents = function (conts) {
 	var self = this;
 	self.contents = conts;
 	self.findDependencies();
-	console.log(orderOfCalculation());
-	self.elValue.textContent = self.contents;
+	self.taint();
+	cells.recalculate();
+};
+Cell.prototype.setValue = function (val) {
+	var self = this;
+	self.value = val;
+	self.elValue.textContent = val;
+};
+cells.recalculate = function () {
+	var self = cells;
+	var order = orderOfCalculation();
+	for (var i = 0, l = order.length; i < l; ++i) {
+		var cell = self[order[i]];
+		console.log(cell);
+		if (cell.tainted) {
+			cell.recalculate();
+			cell.tainted = false;
+		}
+	}
+};
+Cell.prototype.recalculate = function () {
+	var self = this;
+	if (self.contents.charAt(0) != '=') {
+		self.setValue(self.contents);
+		return;
+	}
+	var exp = self.contents.substring(1, self.contents.length);
+	var vars = [];
+	for (var i = 0, l = self.dependencies.length; i < l; ++i) {
+		var dep = self.dependencies[i];
+		var prefix = i ? ', ' : 'var ';
+		vars.push(prefix, dep.label, ' = ', dep.stringify());
+	}
+	vars.push(';', exp);
+	console.log(vars.join(''));
+	var result = eval(vars.join(''));
+	var resultnum = parseInt(result, 10);
+	console.log(result,resultnum);
+	if (resultnum || resultnum === 0) {
+		result = resultnum;
+	}
+	self.setValue(result);
+};
+Cell.prototype.stringify = function () {
+	var self = this;
+	if ('number' == typeof self.value)
+		return self.value;
+	return JSON.stringify(self.value);
+};
+Cell.prototype.taint = function () {
+	var self = this;
+	if (self.tainted) return;
+	self.tainted = true;
+	for (var dep in self.reverseDependencies) {
+		self.reverseDependencies[dep].taint();
+	}
+};
+cells.get = function (label) {
+	var self = cells;
+	if (label.length != 1) return null;
+	var idx = label.charCodeAt(0) - "a".charCodeAt(0);
+	if (idx < 0 || idx > self.length) return null;
+	return self[idx];
+};
+Cell.prototype.clearDependencies = function () {
+	var self = this;
+	if (!self.dependencies) return;
+	for (var i = 0, l = self.dependencies.length; i < l; ++i) {
+		var dep = self.dependencies[i];
+		dep.determines(self, false);
+	}
+	self.dependencies = [];
+};
+// a.determines(b, true (false)) means that when a is recalculated,
+// b should (shouldn't) be recalculated
+Cell.prototype.determines = function (other, b) {
+	var self = this;
+	if (!self.reverseDependencies) self.reverseDependencies = {};
+	if (b) {
+		self.reverseDependencies[other.label] = other;
+	} else {
+		delete self.reverseDependencies[other.label];
+	}
 };
 Cell.prototype.findDependencies = function () {
 	var self = this;
+	self.clearDependencies();
 	if (self.contents.charAt(0) != '=') {
-		self.dependencies = [];
 		return;
 	}
-	var chars = self.contents.match(/[a-z]/g);
-	var deps = [];
+	var chars = self.contents.match(/[a-z]/g) || [];
+	var deps = self.dependencies;
 	for (var i = 0, l = chars.length; i < l; ++i) {
-		var idx = chars[i].charCodeAt(0) - "a".charCodeAt(0);
-		//console.log(idx);
-		deps.push(cells[idx]);
+		var dep = cells.get(chars[i]);
+		dep.determines(self, true);
+		deps.push(dep);
 	}
-	self.dependencies = deps;
 	self.drawArrows();
 };
 Cell.prototype.drawArrows = function () {
@@ -71,8 +153,8 @@ function orderOfCalculation() {
 			dep = cell.dependencies[j];
 			//console.log(cell.dependencies);
 			var depvertex = vertices[dep.idx];
-			++depvertex.invalue;
-			vertices[i].edges.push(depvertex);
+			++vertices[i].invalue;
+			depvertex.edges.push(vertices[i]);
 		}
 	}
 	var result = [];
