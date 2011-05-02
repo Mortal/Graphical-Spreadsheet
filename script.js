@@ -40,6 +40,12 @@ Cell.prototype.setValue = function (val) {
 	var self = this;
 	self.value = val;
 	self.elValue.textContent = val;
+	self.elValue.title = '';
+};
+Cell.prototype.setError = function (e) {
+	var self = this;
+	self.setValue('#ERROR');
+	self.elValue.title = e;
 };
 cells.recalculate = function () {
 	var self = cells;
@@ -68,7 +74,13 @@ Cell.prototype.recalculate = function () {
 	}
 	vars.push(';', exp);
 	console.log(vars.join(''));
-	var result = eval(vars.join(''));
+	var result;
+	try {
+		result = eval(vars.join(''));
+	} catch (e) {
+		self.setError(e);
+		return;
+	}
 	var resultnum = parseInt(result, 10);
 	console.log(result,resultnum);
 	if (resultnum || resultnum === 0) {
@@ -127,8 +139,10 @@ Cell.prototype.findDependencies = function () {
 	var deps = self.dependencies;
 	for (var i = 0, l = chars.length; i < l; ++i) {
 		var dep = cells.get(chars[i]);
-		dep.determines(self, true);
-		deps.push(dep);
+		if (dep) {
+			dep.determines(self, true);
+			deps.push(dep);
+		}
 	}
 	self.drawArrows();
 };
